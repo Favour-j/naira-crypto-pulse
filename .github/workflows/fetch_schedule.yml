@@ -1,0 +1,48 @@
+# .github/workflows/fetch_schedule.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Runs fetch.py every 15 minutes and commits the updated Parquet file
+# back to the repo. Streamlit Cloud re-reads it on the next dashboard load.
+#
+# Setup steps (do once):
+#   1. Push this repo to GitHub
+#   2. GitHub Actions is enabled by default on public repos
+#   3. Make sure data/prices.parquet is NOT in .gitignore
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Crypto Price Ingestion
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes
+  workflow_dispatch:          # also lets you trigger it manually from GitHub UI
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # needed to commit the Parquet file back
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests pandas pyarrow
+
+      - name: Run fetch
+        run: python fetch.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/prices.parquet
+          git diff --staged --quiet || git commit -m "chore: snapshot $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
